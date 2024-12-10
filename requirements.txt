@@ -1,0 +1,6 @@
+rembg
+Flask
+scikit-learn
+seaborn
+matplotlib
+xlsxwriter

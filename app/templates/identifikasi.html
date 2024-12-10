@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Klasifikasi Jenis Ikan Channa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .custom-file-input:lang(en)~.custom-file-label::after {
+            content: "Browse";
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="{{ url_for('static', filename='images/app_icon.png') }}" width="40" height="40" class="me-2" alt="App Icon">
+                <span>Aplikasi Klasifikasi Jenis Ikan Channa</span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Upload Gambar</h5>
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="gambar" class="form-label">Pilih gambar ikan:</label>
+                                <input class="form-control" type="file" id="gambar" name="gambar" accept="image/*">
+                            </div>
+                            <div class="mb-3">
+                                <img id="preview-gambar" src="{{ url_for('static', filename='images/image-placeholder.png') }}" class="img-fluid rounded" alt="Preview gambar">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Proses</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Hasil Preprocessing</h5>
+                        <div class="row">
+                            <div class="col-md-3 col-sm-6 mb-4">
+                                <img id="removed_bg_img" src="{{ url_for('static', filename='images/image-placeholder.png') }}" class="img-fluid rounded" alt="Hapus Latar Belakang">
+                                <p class="mt-2 text-center">Hapus Latar Belakang</p>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-4">
+                                <img id="greyscale_img" src="{{ url_for('static', filename='images/image-placeholder.png') }}" class="img-fluid rounded" alt="Greyscale">
+                                <p class="mt-2 text-center">Greyscale</p>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-4">
+                                <img id="trensholding_img" src="{{ url_for('static', filename='images/image-placeholder.png') }}" class="img-fluid rounded" alt="Trensholding">
+                                <p class="mt-2 text-center">Trensholding</p>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-4">
+                                <img id="edge_detector_img" src="{{ url_for('static', filename='images/image-placeholder.png') }}" class="img-fluid rounded" alt="Edge detectory (Canny)">
+                                <p class="mt-2 text-center">Edge detectory (Canny)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Hasil Klasifikasi</h5>
+                        <p class="mb-3">Jenis Ikan Channa: <strong id="jenis_ikan"></strong></p>
+                        <a href="/download/excel" class="btn btn-success d-none" id="dowload_excel">Download Excel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Extraksi Fitur (Invariant Moments) dan GLCM</h5>
+                        <div id="extraksi_fitur_body" class="table-responsive">
+                            <!-- Content will be dynamically inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        $(document).ready(function() {
+            function showToast(message, type) {
+                Toastify({
+                    text: message,
+                    duration: 3000,
+                    close: true,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: type === "error" ? "#dc3545" : "#28a745",
+                }).showToast();
+            }
+
+            $("#gambar").change(function() {
+                const file = this.files[0];
+                if (file) {
+                    let reader = new FileReader();
+                    reader.onload = function(event) {
+                        $('#preview-gambar').attr('src', event.target.result);
+                    }
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            $("#uploadForm").submit(function(e) {
+                e.preventDefault();
+                let formData = new FormData(this);
+
+                $.ajax({
+                    url: "/api/identifikasi",
+                    type: "POST",
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    beforeSend: function() {
+                        showToast("Sedang Memproses Gambar Silahkan Tunggu...", "info");
+                        $("button[type=submit]").prop("disabled", true);
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#removed_bg_img').attr('src', `data:image/jpeg;base64,${response.gambar.removed_bg}`);
+                            $('#greyscale_img').attr('src', `data:image/jpeg;base64,${response.gambar.greyscale}`);
+                            $('#jenis_ikan').text(response.jenis);
+                            $('#trensholding_img').attr('src', `data:image/jpeg;base64,${response.gambar.trensholding}`);
+                            $('#edge_detector_img').attr('src', `data:image/jpeg;base64,${response.gambar.edge_detector}`);
+                            $("#dowload_excel").removeClass("d-none");
+                            generateFeatureExtractionTable(response.ektraksi_fitur);
+                            showToast("Proses selesai", "success");
+                        } else {
+                            showToast(response.error, "error");
+                        }
+                    },
+                    error: function() {
+                        showToast("Terjadi kesalahan saat memproses gambar", "error");
+                    },
+                    complete: function() {
+                        $("button[type=submit]").prop("disabled", false);
+                    }
+                });
+            });
+
+            function generateFeatureExtractionTable(feature) {
+                let tableHtml = '<table class="table table-striped"><tbody>';
+                feature.forEach(row => {
+                    tableHtml += "<tr>";
+                    row.forEach(column => {
+                        tableHtml += `<td>${column}</td>`;
+                    });
+                    tableHtml += "</tr>";
+                });
+                tableHtml += '</tbody></table>';
+                $("#extraksi_fitur_body").html(tableHtml);
+            }
+        });
+    </script>
+</body>
+</html>
